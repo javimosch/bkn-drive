@@ -24,8 +24,17 @@ var (
 	// Two limiters on sign-in, because they stop different attacks. Per-IP
 	// stops one host guessing many passwords; per-account stops many hosts
 	// guessing one account's password, which per-IP alone would wave through.
-	loginByIP      = newLimiter(8, 5*time.Minute)
-	loginByAccount = newLimiter(12, 15*time.Minute)
+	// 15 in 10 minutes: an association browsing from one office NAT shares a
+	// single address, so a tight per-IP budget locks out the innocent along
+	// with the attacker. Still far below what guessing a real password needs.
+	loginByIP = newLimiter(15, 10*time.Minute)
+
+	// bkn locks an account itself after 10 failed attempts -- stricter than
+	// anything sensible here -- so the per-account limiter is kept only as a
+	// wide backstop for a bkn that ever stops doing it. The IP limiter is the
+	// one carrying weight: it is what stops a spray across many accounts, and
+	// what keeps that traffic off bkn in the first place.
+	loginByAccount = newLimiter(30, 15*time.Minute)
 
 	// The rest of the API is authenticated, so this is a ceiling on damage
 	// rather than a gate: generous enough that real use never notices.

@@ -73,9 +73,17 @@ func startServer(host string, port int) {
 	mux.HandleFunc("/api/download", throttled(handleDownload))
 	mux.HandleFunc("/api/preview", throttled(handlePreview))
 
-	// Static UI files from the embedded filesystem.
+	// Static UI files from the embedded filesystem, behind the auto-login
+	// check so "/?k=<key>" can mint a session before the UI ever loads.
 	uiSub, _ := fs.Sub(uiFiles, "ui")
-	mux.Handle("/", http.FileServer(http.FS(uiSub)))
+	var why string
+	auto, why = loadAutoLogin()
+	if why != "" {
+		fmt.Fprintf(os.Stderr, "[auto-login] disabled: %s\n", why)
+	} else if auto != nil {
+		fmt.Fprintf(os.Stderr, "[auto-login] enabled for %s via /?k=<key>\n", auto.Email)
+	}
+	mux.HandleFunc("/", handleAutoLogin(http.FileServer(http.FS(uiSub))))
 
 	// net.JoinHostPort, not ":port": the bare form binds every interface, so a
 	// server told to serve localhost would still be reachable from the whole
