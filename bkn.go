@@ -33,11 +33,16 @@ func newBkn(base string) *bknClient {
 	}
 }
 
+// DefaultBknURL points at a bkn on the same machine. A tool published for
+// other people must not default to somebody else's server: whoever runs this
+// without setting BKN_URL should reach their own bkn, not mine.
+const DefaultBknURL = "http://127.0.0.1:8804"
+
 func bknBase() string {
 	if v := os.Getenv("BKN_URL"); v != "" {
 		return v
 	}
-	return "https://bkn.intrane.fr"
+	return DefaultBknURL
 }
 
 // apiError carries bkn's typed error so the UI can show what bkn actually

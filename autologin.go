@@ -15,7 +15,7 @@ import (
 // "convenient", it means the drive is readable and writable by anyone who
 // finds the hostname. This refuses to enable rather than do that quietly.
 //
-//	BKN_DRIVE_AUTOLOGIN_EMAIL=admin@vdb.com
+//	BKN_DRIVE_AUTOLOGIN_EMAIL=you@example.org
 //	BKN_DRIVE_AUTOLOGIN_PASSWORD_FILE=/home/dk1/bkn-drive/autologin.pw
 //	BKN_DRIVE_AUTOLOGIN_KEY=<32+ random characters>
 //
