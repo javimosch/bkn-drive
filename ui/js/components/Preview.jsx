@@ -5,7 +5,7 @@
 // /api/preview, because a cross-origin fetch of the blob would need CORS
 // headers bkn does not send.
 
-function Preview({ file, drive, onClose, toast }) {
+function Preview({ file, drive, onClose, toast, siblings = [], onNavigate }) {
   const [state, setState] = React.useState({ loading: true });
 
   React.useEffect(() => {
@@ -21,12 +21,24 @@ function Preview({ file, drive, onClose, toast }) {
     return () => { live = false; };
   }, [file, drive]);
 
+  // Where this file sits among its neighbours, so the arrows know what is next.
+  const at = file ? siblings.findIndex(s => s.id === file.id) : -1;
+  const prev = at > 0 ? siblings[at - 1] : null;
+  const next = at >= 0 && at < siblings.length - 1 ? siblings[at + 1] : null;
+
   // Escape closes, because a modal that traps you is worse than no modal.
+  // Arrows walk the gallery: opening one photo and being stuck with it is the
+  // thing that makes people close the viewer and open another.
   React.useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') return onClose();
+      if (!onNavigate) return;
+      if (e.key === 'ArrowLeft' && prev) onNavigate(prev);
+      if (e.key === 'ArrowRight' && next) onNavigate(next);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, onNavigate, prev, next]);
 
   if (!file) return null;
   const src = api.downloadURL(drive, file.path);
@@ -39,6 +51,9 @@ function Preview({ file, drive, onClose, toast }) {
         <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--line)]">
           <span className="text-gray-400"><Icon name="file" /></span>
           <span className="font-medium truncate flex-1">{file.name}</span>
+          {siblings.length > 1 && at >= 0 && (
+            <span className="text-xs text-gray-400">{at + 1} of {siblings.length}</span>
+          )}
           <span className="text-xs text-gray-400">{humanBytes(file.size)}</span>
           <a className="btn !px-2 !py-1.5" href={src} title="Download"><Icon name="download" /></a>
           <button className="btn !px-2 !py-1.5" onClick={onClose} title="Close (Esc)">×</button>
@@ -47,9 +62,17 @@ function Preview({ file, drive, onClose, toast }) {
         {/* A floor on the height: without it a 4KB icon collapses the modal to a
             strip and it reads as broken rather than small. Text is the one kind
             that must not be centred -- a document starts at the top. */}
-        <div className={`flex-1 min-h-[22rem] overflow-auto bg-[#fbfcfe] flex justify-center ${
+        <div className={`relative flex-1 min-h-[22rem] overflow-auto bg-[#fbfcfe] flex justify-center ${
               state.kind === 'text' ? 'items-stretch' : 'items-center'}`}>
+          {prev && (
+            <button onClick={() => onNavigate(prev)} title="Previous (←)"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 btn !px-2.5 !py-2 z-10">‹</button>
+          )}
           <PreviewBody state={state} src={src} file={file} />
+          {next && (
+            <button onClick={() => onNavigate(next)} title="Next (→)"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 btn !px-2.5 !py-2 z-10">›</button>
+          )}
         </div>
       </div>
     </div>

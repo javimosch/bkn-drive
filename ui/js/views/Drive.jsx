@@ -10,6 +10,12 @@ function Drive({ email, onSignedOut, toast }) {
   const [uploads, setUploads] = React.useState([]);
   const [dropping, setDropping] = React.useState(false);
   const [preview, setPreview] = React.useState(null);
+  // "auto" means follow the folder's contents; picking a view explicitly
+  // pins it, because a person who chose List did not mean "until the next
+  // folder happens to hold photos".
+  const [view, setView] = React.useState(() => {
+    try { return localStorage.getItem('drive.view') || 'auto'; } catch (e) { return 'auto'; }
+  });
   const fileInput = React.useRef(null);
 
   const refresh = React.useCallback(async (d = drive, p = path) => {
@@ -38,6 +44,14 @@ function Drive({ email, onSignedOut, toast }) {
   }, []);
 
   function go(p) { setPath(p); }
+
+  function chooseView(v) {
+    setView(v);
+    try { localStorage.setItem('drive.view', v); } catch (e) { /* private mode */ }
+  }
+
+  const effectiveView = view === 'auto' ? (looksLikeAGallery(entries) ? 'gallery' : 'list') : view;
+  const images = entries.filter(isImage);
 
   function switchDrive(d) {
     setDrive(d);
@@ -140,6 +154,7 @@ function Drive({ email, onSignedOut, toast }) {
         <div className="flex items-center justify-between mb-4">
           <Breadcrumb path={path} onNavigate={go} />
           <div className="flex gap-2">
+            <ViewToggle view={effectiveView} onChange={chooseView} />
             <button className="btn" onClick={newFolder}><Icon name="plus" /> New folder</button>
             <button className="btn btn-primary" onClick={() => fileInput.current.click()}>
               <Icon name="upload" /> Upload
@@ -154,16 +169,25 @@ function Drive({ email, onSignedOut, toast }) {
             <button className="w-full text-left px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 border-b border-[var(--line)]"
                     onClick={() => go(parentOf(path))}>← Back</button>
           )}
-          <FileList
-            entries={entries} busy={busy}
-            onOpen={e => go(e.path)}
-            onPreview={e => setPreview(e)}
-            onDelete={remove} onRename={rename} onShare={share}
-            downloadURL={p => api.downloadURL(drive, p)} />
+          {effectiveView === 'gallery' ? (
+            <Gallery
+              entries={entries} busy={busy}
+              onOpen={e => go(e.path)}
+              onPreview={e => setPreview(e)}
+              downloadURL={p => api.downloadURL(drive, p)} />
+          ) : (
+            <FileList
+              entries={entries} busy={busy}
+              onOpen={e => go(e.path)}
+              onPreview={e => setPreview(e)}
+              onDelete={remove} onRename={rename} onShare={share}
+              downloadURL={p => api.downloadURL(drive, p)} />
+          )}
           <Uploads items={uploads} />
         </div>
 
-        <Preview file={preview} drive={drive} toast={toast} onClose={() => setPreview(null)} />
+        <Preview file={preview} drive={drive} toast={toast} siblings={images}
+                 onNavigate={setPreview} onClose={() => setPreview(null)} />
       </main>
     </div>
   );
