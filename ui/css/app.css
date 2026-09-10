@@ -1,0 +1,50 @@
+:root {
+  --ink: #16181d;
+  --muted: #6b7280;
+  --line: #e8e9ee;
+  --accent: #3b5bdb;
+  --accent-soft: #edf0fe;
+  --danger: #c92a2a;
+}
+
+body {
+  margin: 0;
+  background: #f7f8fa;
+  color: var(--ink);
+  font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.card { background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+.shadow-soft { box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 8px 24px -12px rgba(16, 24, 40, .12); }
+
+.row { transition: background-color .12s ease; }
+.row:hover { background: #fafbfe; }
+.row:hover .row-actions { opacity: 1; }
+.row-actions { opacity: 0; transition: opacity .12s ease; }
+
+/* A drop target has to be obvious the moment a file is over it, or people let
+   go somewhere else and lose the upload. */
+.dropping { outline: 2px dashed var(--accent); outline-offset: -6px; background: var(--accent-soft); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: .45rem;
+  padding: .5rem .85rem; border-radius: 9px; font-size: .875rem; font-weight: 500;
+  border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+.btn:hover { background: #f4f5f8; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: #31489f; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.quota-track { height: 6px; border-radius: 999px; background: #eceef3; overflow: hidden; }
+.quota-fill { height: 100%; background: var(--accent); transition: width .3s ease; }
+.quota-fill.warn { background: #e8590c; }
+.quota-fill.full { background: var(--danger); }
+
+.toast { animation: rise .18s ease-out; }
+@keyframes rise { from { transform: translateY(8px); opacity: 0 } to { transform: none; opacity: 1 } }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg) } }
