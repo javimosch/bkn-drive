@@ -17,7 +17,9 @@ import (
 	"os"
 )
 
-const Version = "1.0.0"
+// Version is a var, not a const, so -ldflags "-X main.Version=..." can set it.
+// As a const the linker flag is silently ignored and every build claims 1.0.0.
+var Version = "1.0.0"
 
 // Semantic exit codes (cli-output-spec §2).
 const (

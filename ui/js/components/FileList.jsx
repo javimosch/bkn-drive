@@ -1,6 +1,6 @@
 // FileList.jsx - the table of entries, and the row actions.
 
-function FileList({ entries, busy, onOpen, onDelete, onRename, onShare, downloadURL }) {
+function FileList({ entries, busy, onOpen, onPreview, onDelete, onRename, onShare, downloadURL }) {
   if (busy) {
     return (
       <div className="py-20 text-center text-sm text-gray-400 flex items-center justify-center gap-2">
@@ -25,8 +25,9 @@ function FileList({ entries, busy, onOpen, onDelete, onRename, onShare, download
           <tr key={e.id} className="row border-b border-[var(--line)] last:border-0">
             <td className="py-2.5 pl-4">
               <button
-                className={`flex items-center gap-2.5 text-left ${e.kind === 'folder' ? 'font-medium hover:underline' : ''}`}
-                onClick={() => e.kind === 'folder' && onOpen(e)}>
+                className="flex items-center gap-2.5 text-left hover:underline"
+                title={e.kind === 'folder' ? 'Open' : 'Preview'}
+                onClick={() => (e.kind === 'folder' ? onOpen(e) : onPreview(e))}>
                 <span className={e.kind === 'folder' ? 'text-[var(--accent)]' : 'text-gray-400'}>
                   <Icon name={e.kind === 'folder' ? 'folder' : 'file'} />
                 </span>

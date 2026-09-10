@@ -9,6 +9,7 @@ function Drive({ email, onSignedOut, toast }) {
   const [busy, setBusy] = React.useState(true);
   const [uploads, setUploads] = React.useState([]);
   const [dropping, setDropping] = React.useState(false);
+  const [preview, setPreview] = React.useState(null);
   const fileInput = React.useRef(null);
 
   const refresh = React.useCallback(async (d = drive, p = path) => {
@@ -156,10 +157,13 @@ function Drive({ email, onSignedOut, toast }) {
           <FileList
             entries={entries} busy={busy}
             onOpen={e => go(e.path)}
+            onPreview={e => setPreview(e)}
             onDelete={remove} onRename={rename} onShare={share}
             downloadURL={p => api.downloadURL(drive, p)} />
           <Uploads items={uploads} />
         </div>
+
+        <Preview file={preview} drive={drive} toast={toast} onClose={() => setPreview(null)} />
       </main>
     </div>
   );

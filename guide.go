@@ -10,7 +10,7 @@ import "encoding/json"
 func guideJSON() string {
 	g := map[string]any{
 		"bkn-drive": "A Go CLI with an embedded React web UI, compiled to a single binary.",
-		"version":                  Version,
+		"version":   Version,
 		"one_liner": "Starts an HTTP server that serves a React 18 dashboard at / and a JSON API at /api/*, " +
 			"from one static binary with the UI embedded via go:embed — no assets to deploy alongside it.",
 		"model": map[string]string{

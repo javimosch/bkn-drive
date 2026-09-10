@@ -64,12 +64,13 @@ func startServer(host string, port int) {
 	// browser hold a bkn token.
 	bkn = newBkn(bknBase())
 	sessions = newSessions(12 * time.Hour)
-	mux.HandleFunc("/api/login", handleLogin)
+	mux.HandleFunc("/api/login", handleLogin) // rate limited inside, per IP and per account
 	mux.HandleFunc("/api/logout", handleLogout)
 	mux.HandleFunc("/api/me", handleMe)
-	mux.HandleFunc("/api/drive", handleDrive)
-	mux.HandleFunc("/api/upload", handleUpload)
-	mux.HandleFunc("/api/download", handleDownload)
+	mux.HandleFunc("/api/drive", throttled(handleDrive))
+	mux.HandleFunc("/api/upload", throttled(handleUpload))
+	mux.HandleFunc("/api/download", throttled(handleDownload))
+	mux.HandleFunc("/api/preview", throttled(handlePreview))
 
 	// Static UI files from the embedded filesystem.
 	uiSub, _ := fs.Sub(uiFiles, "ui")

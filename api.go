@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // MaxUpload matches the drive-upload hook's max_bytes. Rejecting here as well
@@ -18,6 +19,16 @@ const MaxUpload = 25 << 20
 var (
 	bkn      *bknClient
 	sessions *sessionStore
+
+	// Two limiters on sign-in, because they stop different attacks. Per-IP
+	// stops one host guessing many passwords; per-account stops many hosts
+	// guessing one account's password, which per-IP alone would wave through.
+	loginByIP      = newLimiter(8, 5*time.Minute)
+	loginByAccount = newLimiter(12, 15*time.Minute)
+
+	// The rest of the API is authenticated, so this is a ceiling on damage
+	// rather than a gate: generous enough that real use never notices.
+	apiByIP = newLimiter(240, time.Minute)
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -95,9 +106,19 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"ok": false})
 		return
 	}
+	ip := clientIP(r)
+	if ok, retry := loginByIP.allow(ip); !ok {
+		tooMany(w, retry, "too many sign-in attempts from this address")
+		return
+	}
 	var body struct{ Email, Password string }
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
 		writeAPIErr(w, &apiError{Status: 400, Type: "validation_error", Message: "body must be JSON"})
+		return
+	}
+	account := strings.ToLower(strings.TrimSpace(body.Email))
+	if ok, retry := loginByAccount.allow(account); !ok {
+		tooMany(w, retry, "too many sign-in attempts for this account")
 		return
 	}
 	toks, email, err := bkn.Login(strings.TrimSpace(body.Email), body.Password)
@@ -105,6 +126,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeAPIErr(w, err)
 		return
 	}
+	// Signing in successfully clears the counters: a person who mistyped twice
+	// and then got it right should not be one typo from a lockout.
+	loginByIP.forget(ip)
+	loginByAccount.forget(account)
 	sessions.create(w, r, &session{Email: email, Access: toks.Access, Refresh: toks.Refresh})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "email": email})
 }
