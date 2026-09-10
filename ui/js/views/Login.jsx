@@ -5,13 +5,17 @@ function Login({ onSignedIn }) {
   const [password, setPassword] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
+  // Default on: this drive is used from a small number of known machines, and
+  // retyping a 28-character generated password every day is how passwords end
+  // up on sticky notes.
+  const [remember, setRemember] = React.useState(true);
 
   async function submit(e) {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      const res = await api.login(email.trim(), password);
+      const res = await api.login(email.trim(), password, remember);
       onSignedIn(res.email);
     } catch (err) {
       setError(err.message);
@@ -44,6 +48,12 @@ function Login({ onSignedIn }) {
                  onChange={e => setPassword(e.target.value)}
                  className="mt-1.5 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                  placeholder="••••••••••" />
+
+          <label className="flex items-center gap-2 mt-4 text-sm text-gray-600 select-none cursor-pointer">
+            <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
+                   className="rounded border-[var(--line)] accent-[var(--accent)]" />
+            Stay signed in on this device for 30 days
+          </label>
 
           {error && (
             <div className="mt-4 flex items-start gap-2 text-sm text-red-600">

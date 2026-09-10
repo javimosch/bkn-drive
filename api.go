@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -111,7 +112,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		tooMany(w, retry, "too many sign-in attempts from this address")
 		return
 	}
-	var body struct{ Email, Password string }
+	var body struct {
+		Email, Password string
+		Remember        bool `json:"remember"`
+	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
 		writeAPIErr(w, &apiError{Status: 400, Type: "validation_error", Message: "body must be JSON"})
 		return
@@ -130,8 +134,29 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	// and then got it right should not be one typo from a lockout.
 	loginByIP.forget(ip)
 	loginByAccount.forget(account)
-	sessions.create(w, r, &session{Email: email, Access: toks.Access, Refresh: toks.Refresh})
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "email": email})
+	sessions.create(w, r, &session{Email: email, Access: toks.Access, Refresh: toks.Refresh}, body.Remember)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "email": email, "remembered": body.Remember})
+}
+
+// handleResetLimits clears the rate limiters. Reachable only by a direct
+// loopback call on the box: traefik always sets X-Forwarded-For, so a request
+// carrying one arrived from outside no matter what its peer address says.
+// Restarting the process also clears them, but that drops every session and
+// interrupts anyone mid-upload.
+func handleResetLimits(w http.ResponseWriter, r *http.Request) {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() || r.Header.Get("X-Forwarded-For") != "" {
+		http.NotFound(w, r) // do not advertise that it exists
+		return
+	}
+	loginByIP.reset()
+	loginByAccount.reset()
+	apiByIP.reset()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "reset": true})
 }
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {

@@ -74,6 +74,13 @@ func (l *limiter) allow(key string) (bool, time.Duration) {
 	return true, 0
 }
 
+// reset clears every key, for an operator digging someone out of a lockout.
+func (l *limiter) reset() {
+	l.mu.Lock()
+	l.hits = map[string][]time.Time{}
+	l.mu.Unlock()
+}
+
 // forget clears a key. A successful sign-in should not leave the person one
 // typo away from being locked out.
 func (l *limiter) forget(key string) {

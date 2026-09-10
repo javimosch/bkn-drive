@@ -24,10 +24,10 @@ async function apiCall(path, options = {}) {
 
 const api = {
   me:     ()             => apiCall('/api/me'),
-  login:  (email, password) => apiCall('/api/login', {
+  login:  (email, password, remember) => apiCall('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email, password, remember: !!remember }),
           }),
   logout: ()             => apiCall('/api/logout', { method: 'POST' }),
 

@@ -66,6 +66,7 @@ func startServer(host string, port int) {
 	sessions = newSessions(12 * time.Hour)
 	mux.HandleFunc("/api/login", handleLogin) // rate limited inside, per IP and per account
 	mux.HandleFunc("/api/logout", handleLogout)
+	mux.HandleFunc("/api/_reset-limits", handleResetLimits) // loopback only
 	mux.HandleFunc("/api/me", handleMe)
 	mux.HandleFunc("/api/drive", throttled(handleDrive))
 	mux.HandleFunc("/api/upload", throttled(handleUpload))

@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -71,5 +72,43 @@ func TestClientIPIgnoresForwardedFromANonLoopbackPeer(t *testing.T) {
 	r.Header.Set("X-Forwarded-For", "1.2.3.4")
 	if got := clientIP(r); got != "203.0.113.7" {
 		t.Fatalf("clientIP = %q, want the real peer", got)
+	}
+}
+
+// The reset endpoint must be invisible from outside. Traefik always sets
+// X-Forwarded-For, so a request carrying one came through the proxy however
+// loopback-looking its peer address is.
+func TestResetLimitsIsLoopbackOnly(t *testing.T) {
+	cases := []struct {
+		name, remote, fwd string
+		wantStatus        int
+	}{
+		{"direct loopback", "127.0.0.1:5000", "", 200},
+		{"through traefik", "127.0.0.1:5000", "203.0.113.9", 404},
+		{"remote peer", "203.0.113.9:5000", "", 404},
+	}
+	for _, c := range cases {
+		r := httptest.NewRequest("POST", "/api/_reset-limits", nil)
+		r.RemoteAddr = c.remote
+		if c.fwd != "" {
+			r.Header.Set("X-Forwarded-For", c.fwd)
+		}
+		w := httptest.NewRecorder()
+		handleResetLimits(w, r)
+		if w.Code != c.wantStatus {
+			t.Errorf("%s: status = %d, want %d", c.name, w.Code, c.wantStatus)
+		}
+	}
+}
+
+func TestResetActuallyClears(t *testing.T) {
+	l := newLimiter(1, time.Hour)
+	l.allow("k")
+	if ok, _ := l.allow("k"); ok {
+		t.Fatal("limit not enforced")
+	}
+	l.reset()
+	if ok, _ := l.allow("k"); !ok {
+		t.Fatal("reset did not clear the limiter")
 	}
 }
