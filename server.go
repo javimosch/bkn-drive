@@ -73,6 +73,10 @@ func startServer(host string, port int) {
 	mux.HandleFunc("/api/download", throttled(handleDownload))
 	mux.HandleFunc("/api/preview", throttled(handlePreview))
 
+	// Public share links. No session, no account: the token in the path is
+	// the whole credential, so this shares the sign-in rate limiter.
+	mux.HandleFunc("/s/", shareThrottled(handleShare))
+
 	// Static UI files from the embedded filesystem, behind the auto-login
 	// check so "/?k=<key>" can mint a session before the UI ever loads.
 	uiSub, _ := fs.Sub(uiFiles, "ui")

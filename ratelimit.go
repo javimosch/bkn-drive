@@ -161,3 +161,16 @@ func throttled(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r)
 	}
 }
+
+// shareThrottled guards the public share pages. Share links are guessed the
+// same way passwords are, so they draw on the sign-in budget rather than the
+// roomier API one.
+func shareThrottled(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if ok, retry := loginByIP.allow(clientIP(r)); !ok {
+			tooMany(w, retry, "too many attempts from this address")
+			return
+		}
+		next(w, r)
+	}
+}

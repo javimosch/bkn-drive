@@ -192,6 +192,7 @@ var driveOps = map[string]bool{
 	"ls": true, "mkdir": true, "stat": true, "rm": true, "mv": true,
 	"quota": true, "share": true, "unshare": true, "shares": true,
 	"bin": true, "restore": true, "purge": true, "empty-bin": true,
+	"link-create": true, "links": true, "link-revoke": true,
 	"groups": true, "group-create": true, "group-add": true, "group-remove": true,
 }
 

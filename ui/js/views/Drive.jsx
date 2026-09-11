@@ -220,10 +220,10 @@ function Drive({ email, onSignedOut, toast }) {
     if (to && to !== e.name) run({ op: 'mv', drive, path: e.path, to_name: to }, `Renamed to ${to}`);
   }
 
-  function share(e) {
-    const user = window.prompt(`Share ${e.name} with which email?`);
-    if (user) run({ op: 'share', drive, path: e.path, user, access: 'read' }, `Shared with ${user}`);
-  }
+  // Sharing by email grants access to an account on this bkn. For an
+  // association sending a document to a notary that is the wrong primitive
+  // entirely -- they would need a login first. A link is the right one.
+  const [sharing, setSharing] = React.useState(null);
 
   async function signOut() {
     await api.logout().catch(() => {});
@@ -326,7 +326,7 @@ function Drive({ email, onSignedOut, toast }) {
               entries={entries} busy={busy}
               onOpen={e => go(e.path)}
               onPreview={e => setPreview(e)}
-              onDelete={remove} onRename={rename} onShare={share}
+              onDelete={remove} onRename={rename} onShare={e => setSharing(e)}
               selected={selected} onToggle={toggle} onToggleAll={toggleAll}
               downloadURL={p => api.downloadURL(drive, p)} />
           )}
@@ -334,6 +334,10 @@ function Drive({ email, onSignedOut, toast }) {
           </>
           )}
         </div>
+
+        {sharing && (
+          <Share file={sharing} drive={drive} toast={toast} onClose={() => setSharing(null)} />
+        )}
 
         <Preview file={preview} drive={drive} toast={toast} siblings={images}
                  onNavigate={setPreview} onClose={() => setPreview(null)} />
