@@ -82,20 +82,51 @@ func withBkn(w http.ResponseWriter, r *http.Request, fn func(token string) error
 		writeAPIErr(w, err)
 		return
 	}
-	err = fn(sess.Access)
+
+	used := sess.Access
+	err = fn(used)
 	if !errors.Is(err, errUnauthorized) {
 		if err != nil {
 			writeAPIErr(w, err)
 		}
 		return
 	}
-	if sess.Refresh == "" {
+
+	// The access token expired. Exactly one request per session may rotate it:
+	// bkn revokes the old refresh token as it issues the new one, so a second
+	// concurrent refresh presents a spent token and fails. Before this lock,
+	// the UI's own pair of concurrent calls (a listing and a quota read) was
+	// enough to sign somebody out every fifteen minutes.
+	lock := sessions.refreshLock(id)
+	lock.Lock()
+	defer lock.Unlock()
+
+	current, ok := sessions.peek(id)
+	if !ok {
+		writeAPIErr(w, errNoSession)
+		return
+	}
+
+	// Somebody else refreshed while this request waited. Their token is the
+	// good one; asking for another would spend a token that is already gone.
+	if current.Access != used {
+		if err := fn(current.Access); err != nil {
+			writeAPIErr(w, err)
+		}
+		return
+	}
+
+	if current.Refresh == "" {
 		sessions.drop(w, r)
 		writeAPIErr(w, errNoSession)
 		return
 	}
-	fresh, rerr := bkn.Refresh(sess.Refresh)
+
+	fresh, rerr := bkn.Refresh(current.Refresh)
 	if rerr != nil {
+		// Only now is the session genuinely unusable: this request held the
+		// lock, saw the token it had just used, and bkn still refused to
+		// renew it.
 		sessions.drop(w, r)
 		writeAPIErr(w, errNoSession)
 		return

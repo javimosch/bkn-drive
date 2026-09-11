@@ -40,6 +40,13 @@ type sessionStore struct {
 	long  time.Duration
 	path  string
 	dirty bool
+
+	// One refresh at a time per session. bkn's refresh tokens are strictly
+	// single-use -- Refresh revokes the old session row -- so two requests
+	// refreshing at once means the second presents a spent token and fails.
+	// Without this, any pair of concurrent calls that outlive the 15-minute
+	// access token logs the person out.
+	refreshing map[string]*sync.Mutex
 }
 
 var errNoSession = errors.New("not signed in")
@@ -65,6 +72,7 @@ func statePath() string {
 func newSessions(ttl time.Duration) *sessionStore {
 	s := &sessionStore{
 		byID: map[string]*session{}, ttl: ttl, long: LongTTL, path: statePath(),
+		refreshing: map[string]*sync.Mutex{},
 	}
 	s.load()
 	go s.sweep()
@@ -180,6 +188,30 @@ func (s *sessionStore) get(r *http.Request) (string, *session, error) {
 	return ck.Value, sess, nil
 }
 
+// refreshLock returns the lock guarding this session's token rotation.
+func (s *sessionStore) refreshLock(id string) *sync.Mutex {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.refreshing == nil {
+		s.refreshing = map[string]*sync.Mutex{}
+	}
+	mu, ok := s.refreshing[id]
+	if !ok {
+		mu = &sync.Mutex{}
+		s.refreshing[id] = mu
+	}
+	return mu
+}
+
+// peek reads a session by id without touching cookies, so a caller that has
+// waited on the refresh lock can see what the winner stored.
+func (s *sessionStore) peek(id string) (*session, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.byID[id]
+	return sess, ok
+}
+
 func (s *sessionStore) update(id string, fn func(*session)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -195,6 +227,7 @@ func (s *sessionStore) drop(w http.ResponseWriter, r *http.Request) {
 	if ck, err := r.Cookie(sessionCookie); err == nil {
 		s.mu.Lock()
 		delete(s.byID, ck.Value)
+		delete(s.refreshing, ck.Value)
 		s.save()
 		s.mu.Unlock()
 	}
