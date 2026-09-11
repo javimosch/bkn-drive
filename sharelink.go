@@ -21,6 +21,11 @@ const shareBase = `<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>%s</title>
 <style>
+ /* width:100%% on a padded element overflows its container under the default
+    content-box, which is what pushed the download button past the card's right
+    edge. Setting it once here rather than per rule means the next element
+    added to this page cannot reintroduce it. */
+ *,*::before,*::after{box-sizing:border-box}
  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
       background:#f7f8fa;color:#16181d;
       font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
@@ -32,7 +37,7 @@ const shareBase = `<!doctype html>
       border:0;border-radius:9px;padding:.7rem 1rem;font-size:.9rem;font-weight:500;
       width:100%%;cursor:pointer}
  .btn:hover{background:#31489f}
- input{width:100%%;box-sizing:border-box;border:1px solid #e8e9ee;border-radius:9px;
+ input{width:100%%;border:1px solid #e8e9ee;border-radius:9px;
        padding:.6rem .75rem;font-size:.9rem;margin-bottom:.9rem}
  .err{color:#c92a2a;font-size:.85rem;margin:0 0 .9rem}
  .meta{color:#9ca3af;font-size:.75rem;margin-top:1rem;text-align:center}
