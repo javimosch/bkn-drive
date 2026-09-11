@@ -46,7 +46,7 @@ function Toasts({ items, onDismiss }) {
   );
 }
 
-function Quota({ quota }) {
+function Quota({ quota, onBin }) {
   if (!quota) return <div className="h-12" />;
   const used = Number(quota.usage?.used_bytes || 0);
   const max = Number(quota.limits?.max_storage_bytes || 0);
@@ -63,6 +63,14 @@ function Quota({ quota }) {
         {quota.usage?.files || 0} file{(quota.usage?.files || 0) === 1 ? '' : 's'}
         {quota.limits?.source?.max_storage ? ` · limit set per ${quota.limits.source.max_storage}` : ''}
       </div>
+      {/* Binned files still occupy their bytes. Saying so here is the
+          difference between "delete things to free space" working and not. */}
+      {Number(quota.usage?.binned_bytes) > 0 && (
+        <button onClick={onBin}
+                className="mt-1 text-[11px] text-[var(--accent)] hover:underline">
+          {humanBytes(quota.usage.binned_bytes)} of that is in the bin
+        </button>
+      )}
     </div>
   );
 }

@@ -6,7 +6,7 @@
 // hundreds of photos become normal, the fix is a resize endpoint in bkn, not a
 // cleverer grid.
 
-function Gallery({ entries, busy, onOpen, onPreview, downloadURL }) {
+function Gallery({ entries, busy, onOpen, onPreview, downloadURL, selected, onToggle }) {
   if (busy) {
     return (
       <div className="py-20 text-center text-sm text-gray-400 flex items-center justify-center gap-2">
@@ -20,9 +20,15 @@ function Gallery({ entries, busy, onOpen, onPreview, downloadURL }) {
     <div className="p-4 grid gap-3"
          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(9.5rem, 1fr))' }}>
       {entries.map(e => (
-        <button key={e.id}
-                onClick={() => (e.kind === 'folder' ? onOpen(e) : onPreview(e))}
-                className="group text-left rounded-xl border border-[var(--line)] overflow-hidden bg-white hover:border-[var(--accent)] transition">
+        <div key={e.id}
+             className={`group relative text-left rounded-xl border overflow-hidden bg-white transition cursor-pointer
+                         ${selected.has(e.id) ? 'border-[var(--accent)] ring-2 ring-[var(--accent-soft)]' : 'border-[var(--line)] hover:border-[var(--accent)]'}`}
+             onClick={() => (e.kind === 'folder' ? onOpen(e) : onPreview(e))}>
+          <label className="absolute top-2 left-2 z-10 bg-white/90 rounded p-1 shadow-sm"
+                 onClick={ev => ev.stopPropagation()}>
+            <input type="checkbox" className="accent-[var(--accent)] block"
+                   checked={selected.has(e.id)} onChange={() => onToggle(e.id)} />
+          </label>
           <div className="aspect-square bg-[#f4f5f8] flex items-center justify-center overflow-hidden">
             {isImage(e) ? (
               <img src={downloadURL(e.path)} alt={e.name} loading="lazy"
@@ -39,7 +45,7 @@ function Gallery({ entries, busy, onOpen, onPreview, downloadURL }) {
               {e.kind === 'folder' ? 'Folder' : humanBytes(e.size)}
             </div>
           </div>
-        </button>
+        </div>
       ))}
     </div>
   );

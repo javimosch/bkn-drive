@@ -17,6 +17,9 @@ function Drive({ email, onSignedOut, toast }) {
     try { return localStorage.getItem('drive.view') || 'auto'; } catch (e) { return 'auto'; }
   });
   const fileInput = React.useRef(null);
+  const folderInput = React.useRef(null);
+  const [selected, setSelected] = React.useState(new Set());
+  const [inBin, setInBin] = React.useState(false);
 
   const refresh = React.useCallback(async (d = drive, p = path) => {
     setBusy(true);
@@ -37,13 +40,59 @@ function Drive({ email, onSignedOut, toast }) {
 
   React.useEffect(() => { refresh(drive, path); }, [drive, path]);
 
+  // A selection is about the rows on screen; changing folder or drive makes it
+  // meaningless, and acting on a stale one would delete things nobody could
+  // see when they clicked.
+  React.useEffect(() => { setSelected(new Set()); }, [drive, path, inBin]);
+
   React.useEffect(() => {
     api.drive({ op: 'groups' })
       .then(g => setGroups(g.groups || []))
       .catch(() => setGroups([]));  // groups are optional; a failure here is not worth a toast
   }, []);
 
-  function go(p) { setPath(p); }
+  function go(p) { setInBin(false); setPath(p); }
+
+  function toggle(id) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected(prev => prev.size === entries.length ? new Set() : new Set(entries.map(e => e.id)));
+  }
+
+  // Bulk delete runs one op per entry because the drive has no batch op. They
+  // go in sequence rather than in parallel: each one patches the same usage
+  // document, and twenty concurrent quota reservations would be a needless
+  // pile-up on one row.
+  async function deleteSelected() {
+    const chosen = entries.filter(e => selected.has(e.id));
+    if (!chosen.length) return;
+    const names = chosen.length === 1 ? chosen[0].name : `${chosen.length} items`;
+    if (!window.confirm(`Move ${names} to the bin?`)) return;
+
+    let done = 0;
+    const failed = [];
+    for (const e of chosen) {
+      try {
+        await api.drive({ op: 'rm', drive, path: e.path });
+        done++;
+      } catch (err) {
+        failed.push(`${e.name}: ${err.message}`);
+      }
+    }
+    setSelected(new Set());
+    if (done) toast('ok', `${done} moved to the bin`);
+    // Report each failure: "3 of 5 deleted" without saying which two survived
+    // is the kind of summary that makes people delete things twice.
+    for (const f of failed.slice(0, 3)) toast('error', f);
+    if (failed.length > 3) toast('error', `${failed.length - 3} more failed`);
+    refresh();
+  }
 
   function chooseView(v) {
     setView(v);
@@ -58,12 +107,52 @@ function Drive({ email, onSignedOut, toast }) {
     setPath('/');
   }
 
-  async function upload(files) {
+  // Uploading a folder means creating the folders first. The browser gives a
+  // flat list with webkitRelativePath, so the tree has to be rebuilt here.
+  async function uploadFolder(files) {
+    const list = Array.from(files);
+    if (!list.length) return;
+
+    const dirs = new Set();
+    for (const f of list) {
+      const rel = f.webkitRelativePath || f.name;
+      const parts = rel.split('/');
+      parts.pop();
+      let acc = '';
+      for (const seg of parts) { acc = acc ? `${acc}/${seg}` : seg; dirs.add(acc); }
+    }
+
+    // Shallowest first, or a child would be created before its parent exists.
+    const ordered = [...dirs].sort((a, b) => a.split('/').length - b.split('/').length);
+    for (const d of ordered) {
+      const segs = d.split('/');
+      const name = segs.pop();
+      const parent = segs.length ? joinPath(path, segs.join('/')) : path;
+      try {
+        await api.drive({ op: 'mkdir', drive, path: parent, name });
+      } catch (err) {
+        // Re-uploading into an existing tree is normal, not an error.
+        if (!/already exists/i.test(err.message)) {
+          toast('error', `${d}: ${err.message}`);
+          return;
+        }
+      }
+    }
+
+    await upload(list, (f) => {
+      const rel = f.webkitRelativePath || f.name;
+      const segs = rel.split('/');
+      segs.pop();
+      return segs.length ? joinPath(path, segs.join('/')) : path;
+    });
+  }
+
+  async function upload(files, pathFor) {
     for (const file of Array.from(files)) {
       const id = `${file.name}-${Date.now()}-${Math.random()}`;
       setUploads(u => [...u, { id, name: file.name, progress: 0 }]);
       try {
-        await api.upload(drive, path, file, (pct) => {
+        await api.upload(drive, pathFor ? pathFor(file) : path, file, (pct) => {
           setUploads(u => u.map(x => x.id === id ? { ...x, progress: pct } : x));
         });
         toast('ok', `${file.name} uploaded`);
@@ -128,16 +217,21 @@ function Drive({ email, onSignedOut, toast }) {
 
         <nav className="p-2 flex-1">
           {drives.map(d => (
-            <button key={d.key} onClick={() => switchDrive(d.key)}
+            <button key={d.key} onClick={() => { setInBin(false); switchDrive(d.key); }}
                     className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-left
-                                ${drive === d.key ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'hover:bg-gray-50'}`}>
+                                ${drive === d.key && !inBin ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'hover:bg-gray-50'}`}>
               <Icon name={d.icon} /> <span className="truncate">{d.label}</span>
             </button>
           ))}
+          <button onClick={() => setInBin(true)}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-left mt-1
+                              ${inBin ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium' : 'hover:bg-gray-50'}`}>
+            <Icon name="trash" /> <span>Bin</span>
+          </button>
         </nav>
 
         <div className="border-t border-[var(--line)]">
-          <Quota quota={quota} />
+          <Quota quota={quota} onBin={() => setInBin(true)} />
         </div>
         <div className="border-t border-[var(--line)] px-4 py-3 flex items-center justify-between">
           <span className="text-xs text-gray-500 truncate" title={email}>{email}</span>
@@ -152,19 +246,40 @@ function Drive({ email, onSignedOut, toast }) {
             onDragLeave={() => setDropping(false)}
             onDrop={e => { e.preventDefault(); setDropping(false); upload(e.dataTransfer.files); }}>
         <div className="flex items-center justify-between mb-4">
-          <Breadcrumb path={path} onNavigate={go} />
-          <div className="flex gap-2">
+          {inBin
+            ? <h2 className="text-sm font-medium">Bin</h2>
+            : <Breadcrumb path={path} onNavigate={go} />}
+          <div className={`flex gap-2 ${inBin ? 'hidden' : ''}`}>
             <ViewToggle view={effectiveView} onChange={chooseView} />
             <button className="btn" onClick={newFolder}><Icon name="plus" /> New folder</button>
+            <button className="btn" onClick={() => folderInput.current.click()} title="Upload a whole folder">
+              <Icon name="folder" /> Folder
+            </button>
             <button className="btn btn-primary" onClick={() => fileInput.current.click()}>
               <Icon name="upload" /> Upload
             </button>
             <input ref={fileInput} type="file" multiple className="hidden"
                    onChange={e => { upload(e.target.files); e.target.value = ''; }} />
+            <input ref={folderInput} type="file" webkitdirectory="" directory="" multiple className="hidden"
+                   onChange={e => { uploadFolder(e.target.files); e.target.value = ''; }} />
           </div>
         </div>
 
-        <div className={`card shadow-soft overflow-hidden ${dropping ? 'dropping' : ''}`}>
+        {selected.size > 0 && !inBin && (
+          <div className="mb-3 flex items-center gap-3 px-4 py-2.5 card shadow-soft border-[var(--accent)]">
+            <span className="text-sm font-medium">{selected.size} selected</span>
+            <button className="btn !py-1.5 hover:!border-red-300 hover:!text-red-600" onClick={deleteSelected}>
+              <Icon name="trash" /> Move to bin
+            </button>
+            <button className="btn !py-1.5" onClick={() => setSelected(new Set())}>Clear</button>
+          </div>
+        )}
+
+        <div className={`card shadow-soft overflow-hidden ${dropping && !inBin ? 'dropping' : ''}`}>
+          {inBin ? (
+            <Bin drive={drive} toast={toast} onChanged={() => refresh()} />
+          ) : (
+          <>
           {path !== '/' && (
             <button className="w-full text-left px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 border-b border-[var(--line)]"
                     onClick={() => go(parentOf(path))}>← Back</button>
@@ -174,6 +289,7 @@ function Drive({ email, onSignedOut, toast }) {
               entries={entries} busy={busy}
               onOpen={e => go(e.path)}
               onPreview={e => setPreview(e)}
+              selected={selected} onToggle={toggle}
               downloadURL={p => api.downloadURL(drive, p)} />
           ) : (
             <FileList
@@ -181,9 +297,12 @@ function Drive({ email, onSignedOut, toast }) {
               onOpen={e => go(e.path)}
               onPreview={e => setPreview(e)}
               onDelete={remove} onRename={rename} onShare={share}
+              selected={selected} onToggle={toggle} onToggleAll={toggleAll}
               downloadURL={p => api.downloadURL(drive, p)} />
           )}
           <Uploads items={uploads} />
+          </>
+          )}
         </div>
 
         <Preview file={preview} drive={drive} toast={toast} siblings={images}

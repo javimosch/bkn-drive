@@ -1,6 +1,7 @@
 // FileList.jsx - the table of entries, and the row actions.
 
-function FileList({ entries, busy, onOpen, onPreview, onDelete, onRename, onShare, downloadURL }) {
+function FileList({ entries, busy, onOpen, onPreview, onDelete, onRename, onShare, downloadURL,
+                   selected, onToggle, onToggleAll }) {
   if (busy) {
     return (
       <div className="py-20 text-center text-sm text-gray-400 flex items-center justify-center gap-2">
@@ -14,7 +15,14 @@ function FileList({ entries, busy, onOpen, onPreview, onDelete, onRename, onShar
     <table className="w-full text-sm">
       <thead>
         <tr className="text-left text-xs uppercase tracking-wide text-gray-400 border-b border-[var(--line)]">
-          <th className="font-medium py-2.5 pl-4">Name</th>
+          <th className="w-9 pl-4">
+            <input type="checkbox" className="accent-[var(--accent)]"
+                   checked={entries.length > 0 && selected.size === entries.length}
+                   // indeterminate has no JSX attribute; it is a DOM property
+                   ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < entries.length; }}
+                   onChange={onToggleAll} title="Select all" />
+          </th>
+          <th className="font-medium py-2.5">Name</th>
           <th className="font-medium py-2.5 w-28">Size</th>
           <th className="font-medium py-2.5 w-32">Modified</th>
           <th className="w-40"></th>
@@ -22,8 +30,13 @@ function FileList({ entries, busy, onOpen, onPreview, onDelete, onRename, onShar
       </thead>
       <tbody>
         {entries.map(e => (
-          <tr key={e.id} className="row border-b border-[var(--line)] last:border-0">
-            <td className="py-2.5 pl-4">
+          <tr key={e.id}
+              className={`row border-b border-[var(--line)] last:border-0 ${selected.has(e.id) ? 'bg-[var(--accent-soft)]' : ''}`}>
+            <td className="pl-4">
+              <input type="checkbox" className="accent-[var(--accent)]"
+                     checked={selected.has(e.id)} onChange={() => onToggle(e.id)} />
+            </td>
+            <td className="py-2.5">
               <button
                 className="flex items-center gap-2.5 text-left hover:underline"
                 title={e.kind === 'folder' ? 'Open' : 'Preview'}
