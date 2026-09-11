@@ -21,12 +21,20 @@ import (
 // somebody else's files, and the drive's whole promise is that it is not.
 type bknClient struct {
 	Base string
-	HTTP *http.Client
+	// Public is where the BROWSER should reach bkn. It differs from Base when
+	// this process talks to a bkn on localhost but hands out signed download
+	// URLs: a URL pointing at 127.0.0.1 is useless to whoever is reading it.
+	Public string
+	HTTP   *http.Client
 }
 
-func newBkn(base string) *bknClient {
+func newBkn(base, public string) *bknClient {
+	if public == "" {
+		public = base
+	}
 	return &bknClient{
-		Base: strings.TrimSuffix(base, "/"),
+		Base:   strings.TrimSuffix(base, "/"),
+		Public: strings.TrimSuffix(public, "/"),
 		// Uploads are the slow path and 25MB over a domestic uplink is not
 		// quick; the default 30s would cut them off mid-flight.
 		HTTP: &http.Client{Timeout: 5 * time.Minute},
@@ -44,6 +52,10 @@ func bknBase() string {
 	}
 	return DefaultBknURL
 }
+
+// bknPublicBase is the address the browser uses. Set it when BKN_URL points at
+// a loopback or private address that only this process can reach.
+func bknPublicBase() string { return os.Getenv("BKN_PUBLIC_URL") }
 
 // apiError carries bkn's typed error so the UI can show what bkn actually
 // said rather than a generic failure.
@@ -261,14 +273,29 @@ func (c *bknClient) Upload(token string, body map[string]any) (json.RawMessage, 
 	return out, nil
 }
 
-// SignedURL turns the path bkn signs into an absolute one the browser can follow.
+// SignedURL turns the path bkn signs into an absolute one the browser can
+// follow -- against the PUBLIC base, not the one this process dials.
 func (c *bknClient) SignedURL(path string) string {
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		return path
 	}
-	u, err := url.Parse(c.Base + path)
+	base := c.Public
+	if base == "" {
+		base = c.Base
+	}
+	u, err := url.Parse(base + path)
 	if err != nil {
-		return c.Base + path
+		return base + path
 	}
 	return u.String()
+}
+
+// fetchURL is where THIS process reads a blob from: always the base it dials,
+// never the public one, so a text preview does not take a trip through the
+// public proxy to reach a server on the same machine.
+func (c *bknClient) fetchURL(path string) string {
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return path
+	}
+	return c.Base + path
 }

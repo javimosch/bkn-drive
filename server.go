@@ -62,7 +62,7 @@ func startServer(host string, port int) {
 
 	// Drive API. Every one of these needs a session; none of them lets the
 	// browser hold a bkn token.
-	bkn = newBkn(bknBase())
+	bkn = newBkn(bknBase(), bknPublicBase())
 	sessions = newSessions(12 * time.Hour)
 	mux.HandleFunc("/api/login", handleLogin) // rate limited inside, per IP and per account
 	mux.HandleFunc("/api/logout", handleLogout)
@@ -94,7 +94,7 @@ func startServer(host string, port int) {
 	// Startup lines are context — stderr, never stdout (cli-daemon-spec §1).
 	fmt.Fprintf(os.Stderr, "bkn-drive serving on http://%s/\n", addr)
 	fmt.Fprintf(os.Stderr, "  API: http://%s/api/status\n", addr)
-	fmt.Fprintf(os.Stderr, "  bkn: %s\n", bkn.Base)
+	fmt.Fprintf(os.Stderr, "  bkn: %s (public: %s)\n", bkn.Base, bkn.Public)
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		die(ExitPrecondition, "port_unavailable",

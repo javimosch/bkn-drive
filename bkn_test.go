@@ -41,3 +41,24 @@ func TestUnwrapThrowKeepsPlainMessages(t *testing.T) {
 		t.Fatal("an empty error should still say something")
 	}
 }
+
+// A download URL is handed to the browser; a preview fetch is made by this
+// process. When bkn is on localhost and the browser is not, those cannot be
+// the same address -- getting it wrong sends the reader to 127.0.0.1.
+func TestSignedURLUsesThePublicBaseAndFetchUsesTheDialledOne(t *testing.T) {
+	c := newBkn("http://127.0.0.1:8804", "https://bkn.example.org")
+
+	if got := c.SignedURL("/v1/files/ns/name?sig=x"); got != "https://bkn.example.org/v1/files/ns/name?sig=x" {
+		t.Errorf("SignedURL = %q, want the public base", got)
+	}
+	if got := c.fetchURL("/v1/files/ns/name?sig=x"); got != "http://127.0.0.1:8804/v1/files/ns/name?sig=x" {
+		t.Errorf("fetchURL = %q, want the dialled base", got)
+	}
+}
+
+func TestPublicBaseFallsBackToTheDialledBase(t *testing.T) {
+	c := newBkn("https://bkn.example.org", "")
+	if c.Public != "https://bkn.example.org" {
+		t.Fatalf("Public = %q, want the base when no public base is set", c.Public)
+	}
+}

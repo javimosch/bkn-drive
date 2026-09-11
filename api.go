@@ -180,7 +180,7 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true, "signed_in": true, "email": sess.Email, "bkn": bkn.Base,
+		"ok": true, "signed_in": true, "email": sess.Email, "bkn": bkn.Public,
 		"max_upload_bytes": MaxUpload,
 	})
 }

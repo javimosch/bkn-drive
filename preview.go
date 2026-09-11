@@ -106,7 +106,7 @@ func handlePreview(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 
-		resp, err := bkn.HTTP.Get(bkn.SignedURL(doc.URL))
+		resp, err := bkn.HTTP.Get(bkn.fetchURL(doc.URL))
 		if err != nil {
 			return &apiError{Status: 502, Type: "unreachable", Message: "could not read the file: " + err.Error()}
 		}
