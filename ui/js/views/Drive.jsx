@@ -72,14 +72,20 @@ function Drive({ email, onSignedOut, toast }) {
   async function deleteSelected() {
     const chosen = entries.filter(e => selected.has(e.id));
     if (!chosen.length) return;
+    const folders = chosen.filter(e => e.kind === 'folder').length;
     const names = chosen.length === 1 ? chosen[0].name : `${chosen.length} items`;
-    if (!window.confirm(`Move ${names} to the bin?`)) return;
+    const warn = folders
+      ? `\n\nAnything inside the ${folders === 1 ? 'folder' : `${folders} folders`} goes too.`
+      : '';
+    if (!window.confirm(`Move ${names} to the bin?${warn}`)) return;
 
     let done = 0;
     const failed = [];
     for (const e of chosen) {
       try {
-        await api.drive({ op: 'rm', drive, path: e.path });
+        // Already confirmed above, for the whole selection: asking again per
+        // folder would mean twenty dialogs for one click.
+        await api.drive({ op: 'rm', drive, path: e.path, confirm: true });
         done++;
       } catch (err) {
         failed.push(`${e.name}: ${err.message}`);
@@ -180,9 +186,33 @@ function Drive({ email, onSignedOut, toast }) {
     if (name) run({ op: 'mkdir', drive, path, name }, `Created ${name}`);
   }
 
-  function remove(e) {
-    if (!window.confirm(`Delete ${e.name}?${e.kind === 'folder' ? ' The folder must be empty.' : ''}`)) return;
-    run({ op: 'rm', drive, path: e.path }, `Deleted ${e.name}`);
+  // The drive refuses a non-empty folder and says what is inside. That refusal
+  // IS the warning: the count comes from the server rather than from a second
+  // round trip that could disagree with what the delete then does.
+  async function binOne(e) {
+    if (e.kind !== 'folder' && !window.confirm(`Move ${e.name} to the bin?`)) return null;
+    try {
+      await api.drive({ op: 'rm', drive, path: e.path });
+      return `${e.name} moved to the bin`;
+    } catch (err) {
+      if (!/Pass confirm/i.test(err.message)) throw err;
+      if (!window.confirm(`${err.message.replace(/\s*Pass confirm.*$/i, '')}\n\nMove the folder and everything in it to the bin?`)) {
+        return null;
+      }
+      await api.drive({ op: 'rm', drive, path: e.path, confirm: true });
+      return `${e.name} and its contents moved to the bin`;
+    }
+  }
+
+  async function remove(e) {
+    try {
+      const msg = await binOne(e);
+      if (!msg) return;
+      toast('ok', msg);
+      refresh();
+    } catch (err) {
+      toast('error', err.message);
+    }
   }
 
   function rename(e) {
